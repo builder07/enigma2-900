@@ -25,52 +25,18 @@ from Components.SystemInfo import SystemInfo
 from Tools.Geolocation import geolocation
 import urllib2
 
-config.misc.OVupdatecheck = ConfigYesNo(default=True)
-
 class About(Screen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
 		self.setTitle(_("About"))
 		hddsplit = skin.parameters.get("AboutHddSplit", 0)
 
-		model = getBoxType()
-
-		procmodel = getBoxProc()
-
-		stbplatform = boxbranding.getMachineBuild()
-
-		AboutText = _("Hardware: ") + model + "\n"
-		if stbplatform != model:
-			AboutText += _("Platform: ") + stbplatform + "\n"
-		if procmodel != model:
-			AboutText += _("Proc model: ") + procmodel + "\n"
-
-		procmodeltype = getBoxProcType()
-		if procmodeltype is not None and procmodeltype != "unknown":
-			AboutText += _("Hardware type: ") + procmodeltype + "\n"
-
-		hwserial = getHWSerial()
-		if hwserial is not None and hwserial != "unknown":
-			AboutText += _("Hardware serial: ") + hwserial + "\n"
-		if hwserial is not None and hwserial == "unknown":
-			AboutText += _("Hardware serial: ") + about.getCPUSerial() + "\n"
-
-		AboutText += _("Brand/Meta: ") + getBoxBrand() + "\n"
-
-		AboutText += "\n"
+		AboutText = _("Hardware: ") + about.getHardwareTypeString() + "\n"
 		cpu = about.getCPUInfoString()
 		AboutText += _("CPU: ") + cpu + "\n"
-		AboutText += _("CPU brand: ") + about.getCPUBrand() + "\n"
-
-		socfamily = boxbranding.getSoCFamily()
-		if socfamily is not None:
-			AboutText += _("SoC family: ") + socfamily + "\n"
-
-		AboutText += _("CPU architecture: ") + about.getCPUArch() + "\n"
-
-		if not boxbranding.getDisplayType().startswith(' '):
-			AboutText += "\n"
-			AboutText += _("Display type: ") + boxbranding.getDisplayType() + "\n"
+		AboutText += _("Image: ") + about.getImageTypeString() + "\n"
+		AboutText += _("Build date: ") + about.getBuildDateString() + "\n"
+		AboutText += _("Last update: ") + about.getUpdateDateString() + "\n"
 
 		# [WanWizard] Removed until we find a reliable way to determine the installation date
 		# AboutText += _("Installed: ") + about.getFlashDateString() + "\n"
@@ -81,40 +47,32 @@ class About(Screen):
 			EnigmaVersion = EnigmaVersion[0] + " (" + EnigmaVersion[2] + "-" + EnigmaVersion[1] + ")"
 		else:
 			EnigmaVersion = EnigmaVersion[0] + " (" + EnigmaVersion[1] + ")"
-		EnigmaVersion = _("Enigma2 version: ") + EnigmaVersion
+		EnigmaVersion = _("Enigma version: ") + EnigmaVersion
 		self["EnigmaVersion"] = StaticText(EnigmaVersion)
 		AboutText += "\n" + EnigmaVersion + "\n"
-		AboutText += _("Last update: ") + about.getUpdateDateString() + "\n"
-		AboutText += _("Enigma2 (re)starts: %d\n") % config.misc.startCounter.value
-		AboutText += _("Enigma2 debug level: %d\n") % eGetEnigmaDebugLvl()
 
-		if fileExists("/etc/openvision/mediaservice"):
-			mediaservice = open("/etc/openvision/mediaservice", "r").read().strip()
-			AboutText += _("Media service: ") + mediaservice.replace("enigma2-plugin-systemplugins-","") + "\n"
+		AboutText += _("Kernel version: ") + about.getKernelVersionString() + "\n"
 
-		AboutText += "\n"
-
-		AboutText += _("Drivers version: ") + about.getDriverInstalledDate() + "\n"
-		AboutText += _("Kernel version: ") + boxbranding.getKernelVersion() + "\n"
+		AboutText += _("DVB driver version: ") + about.getDriverInstalledDate() + "\n"
 
 		GStreamerVersion = _("GStreamer version: ") + about.getGStreamerVersionString(cpu).replace("GStreamer","")
 		self["GStreamerVersion"] = StaticText(GStreamerVersion)
-		AboutText += "\n" + GStreamerVersion + "\n"
-
-		FFmpegVersion = _("FFmpeg version: ") + about.getFFmpegVersionString()
+		AboutText += GStreamerVersion + "\n"
+		
+	        FFmpegVersion = _("FFmpeg version: ") + about.getFFmpegVersionString()
 		self["FFmpegVersion"] = StaticText(FFmpegVersion)
 		AboutText += FFmpegVersion + "\n"
 
-		AboutText += "\n"
 		AboutText += _("Python version: ") + about.getPythonVersionString() + "\n"
-		AboutText += "\n"
+
+		AboutText += _("Enigma (re)starts: %d\n") % config.misc.startCounter.value
+		AboutText += _("Enigma debug level: %d\n") % eGetEnigmaDebugLvl()
 
 		fp_version = getFPVersion()
 		if fp_version is None:
 			fp_version = ""
 		else:
 			fp_version = _("Frontprocessor version: %s") % fp_version
-
 			AboutText += fp_version + "\n"
 
 		self["FPVersion"] = StaticText(fp_version)
@@ -122,8 +80,7 @@ class About(Screen):
 		AboutText += _('Skin & Resolution: %s (%sx%s)\n') % (config.skin.primary_skin.value.split('/')[0], getDesktop(0).size().width(), getDesktop(0).size().height())
 
 		self["TunerHeader"] = StaticText(_("Detected NIMs:"))
-		AboutText += "\n"
-		AboutText += _("Detected NIMs:") + "\n"
+		AboutText += "\n" + _("Detected NIMs:") + "\n"
 
 		nims = nimmanager.nimListCompressed()
 		for count in range(len(nims)):
@@ -134,8 +91,7 @@ class About(Screen):
 			AboutText += nims[count] + "\n"
 
 		self["HDDHeader"] = StaticText(_("Detected HDD:"))
-		AboutText += "\n"
-		AboutText += _("Detected HDD:") + "\n"
+		AboutText += "\n" + _("Detected HDD:") + "\n"
 
 		hddlist = harddiskmanager.HDDList()
 		hddinfo = ""
@@ -146,16 +102,25 @@ class About(Screen):
 					hddinfo += "\n"
 				hdd = hddlist[count][1]
 				if int(hdd.free()) > 1024:
-					hddinfo += formatstring % (hdd.model(), hdd.capacity(), hdd.Totalfree()/1024.0, "G", _("free"))
+					hddinfo += formatstring % (hdd.model(), hdd.capacity(), hdd.free()/1024.0, "G", _("free"))
 				else:
-					hddinfo += formatstring % (hdd.model(), hdd.capacity(), hdd.Totalfree(), "M", _("free"))
+					hddinfo += formatstring % (hdd.model(), hdd.capacity(), hdd.free(), "M", _("free"))
 		else:
 			hddinfo = _("none")
 		self["hddA"] = StaticText(hddinfo)
 		AboutText += hddinfo + "\n\n" + _("Network Info:")
 		for x in about.GetIPsFromNetworkInterfaces():
 			AboutText += "\n" + x[0] + ": " + x[1]
+			
 		AboutText += '\n\n' + _("Uptime") + ": " + about.getBoxUptime()
+			
+		AboutText += "\n"
+		AboutText += "\n"
+		
+		AboutText += _("Additional image information: ") + "\n"
+		AboutText += _("Idea: ") + about.getIdea() + "\n"
+		AboutText += _("E-mail: ") + about.getEmail() + "\n"
+		AboutText += _("Donate: ") + about.getDonate() + "\n"	
 
 		self["AboutScrollLabel"] = ScrollLabel(AboutText)
 		self["key_green"] = Button(_("Translations"))
@@ -187,243 +152,37 @@ class About(Screen):
 	def showTroubleshoot(self):
 		self.session.open(Troubleshoot)
 
-class OpenVisionInformation(Screen):
+class PartnersAndSponsors(Screen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
-		self.setTitle(_("Open Vision information"))
+		self.setTitle(_("Partners and Sponsors"))
 
-		OpenVisionInformationText = _("Open Vision information") + "\n"
-
-		OpenVisionInformationText += "\n"
-
-		if config.misc.OVupdatecheck.value is True:
-			try:
-				if boxbranding.getVisionVersion().startswith("10"):
-					ovurl = "https://raw.githubusercontent.com/OpenVisionE2/openvision-development-platform/develop/meta-openvision/conf/distro/revision.conf"
-				else:
-					ovurl = "https://raw.githubusercontent.com/OpenVisionE2/openvision-oe/develop/meta-openvision/conf/distro/revision.conf"
-				ovresponse = urllib2.urlopen(ovurl)
-				ovrevision = ovresponse.read()
-				ovrevisionupdate = int(filter(str.isdigit, ovrevision))
-			except Exception as e:
-				ovrevisionupdate = _("Requires internet connection")
-		else:
-			ovrevisionupdate = _("Disabled in configuration")
-
-		if fileExists("/etc/openvision/visionversion"):
-			visionversion = open("/etc/openvision/visionversion", "r").read().strip()
-			OpenVisionInformationText += _("Open Vision version: ") + visionversion + "\n"
-		else:
-			OpenVisionInformationText += _("Open Vision version: ") + boxbranding.getVisionVersion() + "\n"
-
-		if fileExists("/etc/openvision/visionrevision"):
-			visionrevision = open("/etc/openvision/visionrevision", "r").read().strip()
-			OpenVisionInformationText += _("Open Vision revision: ") + visionrevision + " " + _("(Latest revision on github: ") + str(ovrevisionupdate) + ")" + "\n"
-		else:
-			OpenVisionInformationText += _("Open Vision revision: ") + boxbranding.getVisionRevision() + " " + _("(Latest revision on github: ") + str(ovrevisionupdate) + ")" + "\n"
-
-		if fileExists("/etc/openvision/visionlanguage"):
-			visionlanguage = open("/etc/openvision/visionlanguage", "r").read().strip()
-			OpenVisionInformationText += _("Open Vision language: ") + visionlanguage + "\n"
-
-		OpenVisionInformationText += _("Open Vision module: ") + about.getVisionModule() + "\n"
-		OpenVisionInformationText += _("Flash type: ") + about.getFlashType() + "\n"
-
-		OpenVisionInformationText += "\n"
-
-		boxrctype = getBoxRCType()
-		if boxrctype is not None and boxrctype != "unknown":
-			OpenVisionInformationText += _("Factory RC type: ") + boxrctype + "\n"
-		if boxrctype is not None and boxrctype == "unknown":
-			if fileExists("/usr/bin/remotecfg"):
-				OpenVisionInformationText += _("RC type: ") + _("Amlogic remote") + "\n"
-			elif fileExists("/usr/sbin/lircd"):
-				OpenVisionInformationText += _("RC type: ") + _("LIRC remote") + "\n"
-
-		OpenVisionInformationText += _("Open Vision RC type: ") + boxbranding.getRCType() + "\n"
-		OpenVisionInformationText += _("Open Vision RC name: ") + boxbranding.getRCName() + "\n"
-		OpenVisionInformationText += _("Open Vision RC ID number: ") + boxbranding.getRCIDNum() + "\n"
-
-		OpenVisionInformationText += "\n"
-
-		if SystemInfo["HiSilicon"]:
-			OpenVisionInformationText += _("HiSilicon dedicated information") + "\n"
-
-			grab = os.popen("opkg list-installed | grep -- -grab | cut -f4 -d'-'").read().strip()
-			if grab != "" and grab != "r0":
-				OpenVisionInformationText += _("Grab: ") + grab + "\n"
-
-			hihalt = os.popen("opkg list-installed | grep -- -hihalt | cut -f4 -d'-'").read().strip()
-			if hihalt != "":
-				OpenVisionInformationText += _("Halt: ") + hihalt + "\n"
-
-			libs = os.popen("opkg list-installed | grep -- -libs | cut -f4 -d'-'").read().strip()
-			if libs != "":
-				OpenVisionInformationText += _("Libs: ") + libs + "\n"
-
-			partitions = os.popen("opkg list-installed | grep -- -partitions | cut -f4 -d'-'").read().strip()
-			if partitions != "":
-				OpenVisionInformationText += _("Partitions: ") + partitions + "\n"
-
-			reader = os.popen("opkg list-installed | grep -- -reader | cut -f4 -d'-'").read().strip()
-			if reader != "":
-				OpenVisionInformationText += _("Reader: ") + reader + "\n"
-
-			showiframe = os.popen("opkg list-installed | grep -- -showiframe | cut -f4 -d'-'").read().strip()
-			if showiframe != "":
-				OpenVisionInformationText += _("Showiframe: ") + showiframe + "\n"
-
-			OpenVisionInformationText += "\n"
-
-		OpenVisionInformationText += _("Image architecture: ") + boxbranding.getImageArch() + "\n"
-		if boxbranding.getImageFolder() != "":
-			OpenVisionInformationText += _("Image folder: ") + boxbranding.getImageFolder() + "\n"
-		if boxbranding.getImageFileSystem() != "":
-			OpenVisionInformationText += _("Image file system: ") + boxbranding.getImageFileSystem() + "\n"
-		OpenVisionInformationText += _("Image: ") + boxbranding.getImageDistro() + "\n"
-		OpenVisionInformationText += _("Feed URL: ") + boxbranding.getFeedsUrl() + "\n"
-
-		OpenVisionInformationText += _("Compiled by: ") + boxbranding.getDeveloperName() + "\n"
-		OpenVisionInformationText += _("Build date: ") + about.getBuildDateString() + "\n"
-
-		OpenVisionInformationText += _("OE: ") + boxbranding.getImageBuild() + "\n"
-
-		OpenVisionInformationText += "\n"
-
-		if boxbranding.getImageFPU() != "":
-			OpenVisionInformationText += _("FPU: ") + boxbranding.getImageFPU() + "\n"
-
-		if boxbranding.getImageArch() == "aarch64":
-			if boxbranding.getHaveMultiLib() == "True":
-				OpenVisionInformationText += _("MultiLib: ") + _("Yes") + "\n"
-			else:
-				OpenVisionInformationText += _("MultiLib: ") + _("No") + "\n"
-
-		OpenVisionInformationText += "\n"
-
-		if boxbranding.getMachineMtdBoot() != "":
-			OpenVisionInformationText += _("MTD boot: ") + boxbranding.getMachineMtdBoot() + "\n"
-		if boxbranding.getMachineMtdRoot() != "":
-			OpenVisionInformationText += _("MTD root: ") + boxbranding.getMachineMtdRoot() + "\n"
-		if boxbranding.getMachineMtdKernel() != "":
-			OpenVisionInformationText += _("MTD kernel: ") + boxbranding.getMachineMtdKernel() + "\n"
-
-		if boxbranding.getMachineRootFile() != "":
-			OpenVisionInformationText += _("Root file: ") + boxbranding.getMachineRootFile() + "\n"
-		if boxbranding.getMachineKernelFile() != "":
-			OpenVisionInformationText += _("Kernel file: ") + boxbranding.getMachineKernelFile() + "\n"
-
-		if boxbranding.getMachineMKUBIFS() != "":
-			OpenVisionInformationText += _("MKUBIFS: ") + boxbranding.getMachineMKUBIFS() + "\n"
-		if boxbranding.getMachineUBINIZE() != "":
-			OpenVisionInformationText += _("UBINIZE: ") + boxbranding.getMachineUBINIZE() + "\n"
-
-		OpenVisionInformationText += "\n"
-
-		if fileExists("/proc/device-tree/amlogic-dt-id"):
-			devicetid = open("/proc/device-tree/amlogic-dt-id", "r").read().strip()
-			OpenVisionInformationText += _("Device id: ") + devicetid + "\n"
-
-		if fileExists("/proc/device-tree/le-dt-id"):
-			giventid = open("/proc/device-tree/le-dt-id", "r").read().strip()
-			OpenVisionInformationText += _("Given device id: ") + giventid + "\n"
-
-		self["AboutScrollLabel"] = ScrollLabel(OpenVisionInformationText)
 		self["key_red"] = Button(_("Close"))
-
-		self["actions"] = ActionMap(["ColorActions", "SetupActions", "DirectionActions"],
+                self["key_green"] = Button(_("Become a member"))
+		
+                self["actions"] = ActionMap(["ColorActions", "SetupActions", "DirectionActions"],
 			{
 				"cancel": self.close,
 				"ok": self.close,
-				"up": self["AboutScrollLabel"].pageUp,
-				"down": self["AboutScrollLabel"].pageDown
+                                "green": self.showForPartnersInfo
 			})
 
-class DVBInformation(Screen):
+	def showForPartnersInfo(self):
+		self.session.open(ForPartnersInfo)	
+
+class ForPartnersInfo(Screen):
 	def __init__(self, session):
 		Screen.__init__(self, session)
-		self.setTitle(_("DVB information"))
+		self.setTitle(_("Become a member"))
 
-		DVBInformationText = _("DVB information") + "\n"
+		self["key_red"] = Button(_("Cancel"))
 
-		DVBInformationText += "\n"
+		self["Info"] = StaticText(_("To the attention of Partners and Sponsors!!! Your information can be posted here. For all questions, please contact by e-mail: blackfish.3654@gmail.com"))
 
-		DVBInformationText += _("DVB API: ") + about.getDVBAPI() + "\n"
-
-		if fileExists("/usr/bin/dvb-fe-tool"):
-			import time
-			try:
-				cmd = 'dvb-fe-tool > /tmp/dvbfetool.txt'
-				Console().ePopen(cmd)
-				cmdv = "dvb-fe-tool | grep -o 'DVB API Version [0-9].[0-9]*' | sed 's|[^0-9]*||' > /tmp/dvbapiversion.txt"
-				Console().ePopen(cmdv)
-				time.sleep(0.1)
-			except:
-				pass
-
-		if fileExists("/tmp/dvbapiversion.txt"):
-			dvbapiversion = open("/tmp/dvbapiversion.txt", "r").read().strip()
-			DVBInformationText += _("DVB API version: ") + dvbapiversion + "\n"
-
-		DVBInformationText += "\n"
-
-		if boxbranding.getHaveTranscoding() == "True":
-			DVBInformationText += _("Transcoding: ") + _("Yes") + "\n"
-		else:
-			DVBInformationText += _("Transcoding: ") + _("No") + "\n"
-
-		if boxbranding.getHaveMultiTranscoding() == "True":
-			DVBInformationText += _("MultiTranscoding: ") + _("Yes") + "\n"
-		else:
-			DVBInformationText += _("MultiTranscoding: ") + _("No") + "\n"
-
-		DVBInformationText += "\n"
-
-		if fileExists("/tmp/dvbfetool.txt"):
-			if fileHas("/tmp/dvbfetool.txt","DVBC") or fileHas("/tmp/dvbfetool.txt","DVB-C"):
-				DVBInformationText += _("DVB-C: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("DVB-C: ") + _("No") + "\n"
-			if fileHas("/tmp/dvbfetool.txt","DVBS") or fileHas("/tmp/dvbfetool.txt","DVB-S"):
-				DVBInformationText += _("DVB-S: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("DVB-S: ") + _("No") + "\n"
-			if fileHas("/tmp/dvbfetool.txt","DVBT") or fileHas("/tmp/dvbfetool.txt","DVB-T"):
-				DVBInformationText += _("DVB-T: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("DVB-T: ") + _("No") + "\n"
-
-			DVBInformationText += "\n"
-
-			if fileHas("/tmp/dvbfetool.txt","MULTISTREAM"):
-				DVBInformationText += _("Multistream: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("Multistream: ") + _("No") + "\n"
-
-			DVBInformationText += "\n"
-
-			if fileHas("/tmp/dvbfetool.txt","ANNEX_A") or fileHas("/tmp/dvbfetool.txt","ANNEX-A"):
-				DVBInformationText += _("ANNEX-A: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("ANNEX-A: ") + _("No") + "\n"
-			if fileHas("/tmp/dvbfetool.txt","ANNEX_B") or fileHas("/tmp/dvbfetool.txt","ANNEX-B"):
-				DVBInformationText += _("ANNEX-B: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("ANNEX-B: ") + _("No") + "\n"
-			if fileHas("/tmp/dvbfetool.txt","ANNEX_C") or fileHas("/tmp/dvbfetool.txt","ANNEX-C"):
-				DVBInformationText += _("ANNEX-C: ") + _("Yes") + "\n"
-			else:
-				DVBInformationText += _("ANNEX-C: ") + _("No") + "\n"
-
-		self["AboutScrollLabel"] = ScrollLabel(DVBInformationText)
-		self["key_red"] = Button(_("Close"))
-
-		self["actions"] = ActionMap(["ColorActions", "SetupActions", "DirectionActions"],
+		self["actions"] = ActionMap(["SetupActions"],
 			{
 				"cancel": self.close,
-				"ok": self.close,
-				"up": self["AboutScrollLabel"].pageUp,
-				"down": self["AboutScrollLabel"].pageDown
+				"ok": self.close
 			})
 
 class Geolocation(Screen):
@@ -431,9 +190,7 @@ class Geolocation(Screen):
 		Screen.__init__(self, session)
 		self.setTitle(_("Geolocation"))
 
-		GeolocationText = _("Geolocation information") + "\n"
-
-		GeolocationText += "\n"
+		GeolocationText = "\n"
 
 		try:
 			continent = geolocation.get("continent", None)
@@ -485,7 +242,7 @@ class Geolocation(Screen):
 				GeolocationText +=  _("Longitude: ") + str(float(longitude)) + "\n"
 			self["AboutScrollLabel"] = ScrollLabel(GeolocationText)
 		except Exception as e:
-			self["AboutScrollLabel"] = ScrollLabel(_("Requires internet connection"))
+			self["AboutScrollLabel"] = ScrollLabel(_("Requires internet connection."))
 
 		self["key_red"] = Button(_("Close"))
 
@@ -495,516 +252,7 @@ class Geolocation(Screen):
 				"ok": self.close,
 				"up": self["AboutScrollLabel"].pageUp,
 				"down": self["AboutScrollLabel"].pageDown
-			})
-
-class BenchmarkInformation(Screen):
-	def __init__(self, session):
-		Screen.__init__(self, session)
-		self.setTitle(_("Benchmark information"))
-
-		BenchmarkInformationText = _("Benchmark information") + "\n"
-
-		BenchmarkInformationText += "\n"
-
-		BenchmarkInformationText += _("CPU benchmark: ") + about.getCPUBenchmark() + "\n"
-
-		self["AboutScrollLabel"] = ScrollLabel(BenchmarkInformationText)
-		self["key_red"] = Button(_("Close"))
-
-		self["actions"] = ActionMap(["ColorActions", "SetupActions", "DirectionActions"],
-			{
-				"cancel": self.close,
-				"ok": self.close,
-				"up": self["AboutScrollLabel"].pageUp,
-				"down": self["AboutScrollLabel"].pageDown
-			})
-
-class Devices(Screen):
-	def __init__(self, session):
-		Screen.__init__(self, session)
-		screentitle = _("Devices")
-		title = screentitle
-		Screen.setTitle(self, title)
-		self["TunerHeader"] = StaticText(_("Detected tuners:"))
-		self["HDDHeader"] = StaticText(_("Detected devices:"))
-		self["MountsHeader"] = StaticText(_("Network servers:"))
-		self["nims"] = StaticText()
-		for count in (0, 1, 2, 3):
-			self["Tuner" + str(count)] = StaticText("")
-		self["hdd"] = StaticText()
-		self["mounts"] = StaticText()
-		self.list = []
-		self.activityTimer = eTimer()
-		self.activityTimer.timeout.get().append(self.populate2)
-		self["key_red"] = Button(_("Close"))
-		self["actions"] = ActionMap(["SetupActions", "ColorActions", "TimerEditActions"],
-									{
-										"cancel": self.close,
-										"ok": self.close,
-										"red": self.close,
-									})
-		self.onLayoutFinish.append(self.populate)
-
-	def populate(self):
-		self.mountinfo = ''
-		self["actions"].setEnabled(False)
-		scanning = _("Please wait while scanning for devices...")
-		self["nims"].setText(scanning)
-		for count in (0, 1, 2, 3):
-			self["Tuner" + str(count)].setText(scanning)
-		self["hdd"].setText(scanning)
-		self['mounts'].setText(scanning)
-		self.activityTimer.start(1)
-
-	def populate2(self):
-		self.activityTimer.stop()
-		self.Console = Console()
-		niminfo = ""
-		nims = nimmanager.nimListCompressed()
-		for count in range(len(nims)):
-			if niminfo:
-				niminfo += "\n"
-			niminfo += nims[count]
-		self["nims"].setText(niminfo)
-
-		nims = nimmanager.nimList()
-		if len(nims) <= 4 :
-			for count in (0, 1, 2, 3):
-				if count < len(nims):
-					self["Tuner" + str(count)].setText(nims[count])
-				else:
-					self["Tuner" + str(count)].setText("")
-		else:
-			desc_list = []
-			count = 0
-			cur_idx = -1
-			while count < len(nims):
-				data = nims[count].split(":")
-				idx = data[0].strip('Tuner').strip()
-				desc = data[1].strip()
-				if desc_list and desc_list[cur_idx]['desc'] == desc:
-					desc_list[cur_idx]['end'] = idx
-				else:
-					desc_list.append({'desc' : desc, 'start' : idx, 'end' : idx})
-					cur_idx += 1
-				count += 1
-
-			for count in (0, 1, 2, 3):
-				if count < len(desc_list):
-					if desc_list[count]['start'] == desc_list[count]['end']:
-						text = "Tuner %s: %s" % (desc_list[count]['start'], desc_list[count]['desc'])
-					else:
-						text = "Tuner %s-%s: %s" % (desc_list[count]['start'], desc_list[count]['end'], desc_list[count]['desc'])
-				else:
-					text = ""
-
-				self["Tuner" + str(count)].setText(text)
-
-		self.hddlist = harddiskmanager.HDDList()
-		self.list = []
-		if self.hddlist:
-			for count in range(len(self.hddlist)):
-				hdd = self.hddlist[count][1]
-				hddp = self.hddlist[count][0]
-				if "ATA" in hddp:
-					hddp = hddp.replace('ATA', '')
-					hddp = hddp.replace('Internal', 'ATA Bus ')
-				free = hdd.Totalfree()
-				if ((float(free) / 1024) / 1024) >= 1:
-					freeline = _("Free: ") + str(round(((float(free) / 1024) / 1024), 2)) + _("TB")
-				elif (free / 1024) >= 1:
-					freeline = _("Free: ") + str(round((float(free) / 1024), 2)) + _("GB")
-				elif free >= 1:
-					freeline = _("Free: ") + str(free) + _("MB")
-				elif "Generic(STORAGE" in hddp:
-					continue
-				else:
-					freeline = _("Free: ") + _("full")
-				line = "%s      %s" %(hddp, freeline)
-				self.list.append(line)
-		self.list = '\n'.join(self.list)
-		self["hdd"].setText(self.list)
-
-		self.Console.ePopen("df -mh | grep -v '^Filesystem'", self.Stage1Complete)
-
-	def Stage1Complete(self, result, retval, extra_args=None):
-		result = result.replace('\n                        ', ' ').split('\n')
-		self.mountinfo = ""
-		for line in result:
-			self.parts = line.split()
-			if line and self.parts[0] and (self.parts[0].startswith('192') or self.parts[0].startswith('//192')):
-				line = line.split()
-				ipaddress = line[0]
-				mounttotal = line[1]
-				mountfree = line[3]
-				if self.mountinfo:
-					self.mountinfo += "\n"
-				self.mountinfo += "%s (%sB, %sB %s)" % (ipaddress, mounttotal, mountfree, _("free"))
-		if pathExists("/media/autofs"):
-			for entry in sorted(listdir("/media/autofs")):
-				mountEntry = path.join("/media/autofs", entry)
-				self.mountinfo += _("\n %s " % (mountEntry))
-
-		if self.mountinfo:
-			self["mounts"].setText(self.mountinfo)
-		else:
-			self["mounts"].setText(_('none'))
-		self["actions"].setEnabled(True)
-
-class SystemNetworkInfo(Screen):
-	def __init__(self, session):
-		Screen.__init__(self, session)
-		screentitle = _("Network")
-		title = screentitle
-		Screen.setTitle(self, title)
-		self.skinName = ["SystemNetworkInfo", "WlanStatus"]
-		self["LabelBSSID"] = StaticText()
-		self["LabelESSID"] = StaticText()
-		self["LabelQuality"] = StaticText()
-		self["LabelSignal"] = StaticText()
-		self["LabelBitrate"] = StaticText()
-		self["LabelEnc"] = StaticText()
-		self["BSSID"] = StaticText()
-		self["ESSID"] = StaticText()
-		self["quality"] = StaticText()
-		self["signal"] = StaticText()
-		self["bitrate"] = StaticText()
-		self["enc"] = StaticText()
-
-		self["IFtext"] = StaticText()
-		self["IF"] = StaticText()
-		self["Statustext"] = StaticText()
-		self["statuspic"] = MultiPixmap()
-		self["statuspic"].setPixmapNum(1)
-		self["statuspic"].show()
-		self["devicepic"] = MultiPixmap()
-
-		self["AboutScrollLabel"] = ScrollLabel()
-
-		self.iface = None
-		self.createscreen()
-		self.iStatus = None
-
-		if iNetwork.isWirelessInterface(self.iface):
-			try:
-				from Plugins.SystemPlugins.WirelessLan.Wlan import iStatus
-
-				self.iStatus = iStatus
-			except:
-				pass
-			self.resetList()
-			self.onClose.append(self.cleanup)
-
-		self["key_red"] = StaticText(_("Close"))
-
-		self["actions"] = ActionMap(["SetupActions", "ColorActions", "DirectionActions"],
-									{
-										"cancel": self.close,
-										"ok": self.close,
-										"up": self["AboutScrollLabel"].pageUp,
-										"down": self["AboutScrollLabel"].pageDown
-									})
-		self.onLayoutFinish.append(self.updateStatusbar)
-
-	def createscreen(self):
-		self.AboutText = ""
-		self.iface = "eth0"
-		eth0 = about.getIfConfig('eth0')
-		if eth0.has_key('addr'):
-			self.AboutText += _("IP:") + "\t" + eth0['addr'] + "\n"
-			if eth0.has_key('netmask'):
-				self.AboutText += _("Netmask:") + "\t" + eth0['netmask'] + "\n"
-			if eth0.has_key('hwaddr'):
-				self.AboutText += _("MAC:") + "\t" + eth0['hwaddr'] + "\n"
-			self.iface = 'eth0'
-
-		eth1 = about.getIfConfig('eth1')
-		if eth1.has_key('addr'):
-			self.AboutText += _("IP:") + "\t" + eth1['addr'] + "\n"
-			if eth1.has_key('netmask'):
-				self.AboutText += _("Netmask:") + "\t" + eth1['netmask'] + "\n"
-			if eth1.has_key('hwaddr'):
-				self.AboutText += _("MAC:") + "\t" + eth1['hwaddr'] + "\n"
-			self.iface = 'eth1'
-
-		ra0 = about.getIfConfig('ra0')
-		if ra0.has_key('addr'):
-			self.AboutText += _("IP:") + "\t" + ra0['addr'] + "\n"
-			if ra0.has_key('netmask'):
-				self.AboutText += _("Netmask:") + "\t" + ra0['netmask'] + "\n"
-			if ra0.has_key('hwaddr'):
-				self.AboutText += _("MAC:") + "\t" + ra0['hwaddr'] + "\n"
-			self.iface = 'ra0'
-
-		wlan0 = about.getIfConfig('wlan0')
-		if wlan0.has_key('addr'):
-			self.AboutText += _("IP:") + "\t" + wlan0['addr'] + "\n"
-			if wlan0.has_key('netmask'):
-				self.AboutText += _("Netmask:") + "\t" + wlan0['netmask'] + "\n"
-			if wlan0.has_key('hwaddr'):
-				self.AboutText += _("MAC:") + "\t" + wlan0['hwaddr'] + "\n"
-			self.iface = 'wlan0'
-
-		wlan3 = about.getIfConfig('wlan3')
-		if wlan3.has_key('addr'):
-			self.AboutText += _("IP:") + "\t" + wlan3['addr'] + "\n"
-			if wlan3.has_key('netmask'):
-				self.AboutText += _("Netmask:") + "\t" + wlan3['netmask'] + "\n"
-			if wlan3.has_key('hwaddr'):
-				self.AboutText += _("MAC:") + "\t" + wlan3['hwaddr'] + "\n"
-			self.iface = 'wlan3'
-
-		rx_bytes, tx_bytes = about.getIfTransferredData(self.iface)
-		self.AboutText += "\n"
-		self.AboutText += _("Bytes received:") + "\t" + rx_bytes + "\n"
-		self.AboutText += _("Bytes sent:") + "\t" + tx_bytes + "\n"
-
-		isp = geolocation.get("isp", None)
-		isporg = geolocation.get("org", None)
-		if isinstance(isp, unicode):
-			isp = isp.encode(encoding="UTF-8", errors="ignore")
-		if isinstance(isporg, unicode):
-			isporg = isporg.encode(encoding="UTF-8", errors="ignore")
-		self.AboutText += "\n"
-		if isp is not None:
-			if isporg is not None:
-				self.AboutText += _("ISP: ") + isp + " " + "(" + isporg + ")" + "\n"
-			else:
-				self.AboutText += _("ISP: ") + isp + "\n"
-
-		mobile = geolocation.get("mobile", False)
-		if mobile is not False:
-			self.AboutText += _("Mobile: ") + _("Yes") + "\n"
-		else:
-			self.AboutText += _("Mobile: ") + _("No") + "\n"
-
-		proxy = geolocation.get("proxy", False)
-		if proxy is not False:
-			self.AboutText += _("Proxy: ") + _("Yes") + "\n"
-		else:
-			self.AboutText += _("Proxy: ") + _("No") + "\n"
-
-		publicip = geolocation.get("query", None)
-		if str(publicip) != "":
-			self.AboutText +=  _("Public IP: ") + str(publicip) + "\n"
-
-		self.AboutText += "\n"
-
-		self.console = Console()
-		self.console.ePopen('ethtool %s' % self.iface, self.SpeedFinished)
-
-	def SpeedFinished(self, result, retval, extra_args):
-		result_tmp = result.split('\n')
-		for line in result_tmp:
-			if 'Speed:' in line:
-				speed = line.split(': ')[1][:-4]
-				self.AboutText += _("Speed:") + "\t" + speed + _('Mb/s')
-
-		hostname = open('/proc/sys/kernel/hostname').read()
-		self.AboutText += "\n"
-		self.AboutText += _("Hostname:") + "\t" + hostname + "\n"
-		self["AboutScrollLabel"].setText(self.AboutText)
-
-	def cleanup(self):
-		if self.iStatus:
-			self.iStatus.stopWlanConsole()
-
-	def resetList(self):
-		if self.iStatus:
-			self.iStatus.getDataForInterface(self.iface, self.getInfoCB)
-
-	def getInfoCB(self, data, status):
-		self.LinkState = None
-		if data is not None and data:
-			if status is not None:
-# getDataForInterface()->iwconfigFinished() in
-# Plugins/SystemPlugins/WirelessLan/Wlan.py sets fields to boolean False
-# if there is no info for them, so we need to check that possibility
-# for each status[self.iface] field...
-#
-				if self.iface == 'wlan0' or self.iface == 'wlan3' or self.iface == 'ra0':
-# accesspoint is used in the "enc" code too, so we get it regardless
-#
-					if not status[self.iface]["accesspoint"]:
-						accesspoint = _("Unknown")
-					else:
-						if status[self.iface]["accesspoint"] == "Not-Associated":
-							accesspoint = _("Not-Associated")
-							essid = _("No connection")
-						else:
-							accesspoint = status[self.iface]["accesspoint"]
-					if self.has_key("BSSID"):
-						self.AboutText += _('Accesspoint:') + '\t' + accesspoint + '\n'
-
-					if self.has_key("ESSID"):
-						if not status[self.iface]["essid"]:
-							essid = _("Unknown")
-						else:
-							if status[self.iface]["essid"] == "off":
-								essid = _("No connection")
-							else:
-								essid = status[self.iface]["essid"]
-						self.AboutText += _('SSID:') + '\t' + essid + '\n'
-
-					if self.has_key("quality"):
-						if not status[self.iface]["quality"]:
-							quality = _("Unknown")
-						else:
-							quality = status[self.iface]["quality"]
-						self.AboutText += _('Link quality:') + '\t' + quality + '\n'
-
-					if self.has_key("bitrate"):
-						if not status[self.iface]["bitrate"]:
-							bitrate = _("Unknown")
-						else:
-							if status[self.iface]["bitrate"] == '0':
-								bitrate = _("Unsupported")
-							else:
-								bitrate = str(status[self.iface]["bitrate"]) + " Mb/s"
-						self.AboutText += _('Bitrate:') + '\t' + bitrate + '\n'
-
-					if self.has_key("signal"):
-						if not status[self.iface]["signal"]:
-							signal = _("Unknown")
-						else:
-							signal = status[self.iface]["signal"]
-						self.AboutText += _('Signal strength:') + '\t' + signal + '\n'
-
-					if self.has_key("enc"):
-						if not status[self.iface]["encryption"]:
-							encryption = _("Unknown")
-						else:
-							if status[self.iface]["encryption"] == "off":
-								if accesspoint == "Not-Associated":
-									encryption = _("Disabled")
-								else:
-									encryption = _("Unsupported")
-							else:
-								encryption = _("Enabled")
-						self.AboutText += _('Encryption:') + '\t' + encryption + '\n'
-
-					if ((status[self.iface]["essid"] and status[self.iface]["essid"] == "off") or
-					    not status[self.iface]["accesspoint"] or
-					    status[self.iface]["accesspoint"] == "Not-Associated"):
-						self.LinkState = False
-						self["statuspic"].setPixmapNum(1)
-						self["statuspic"].show()
-					else:
-						self.LinkState = True
-						iNetwork.checkNetworkState(self.checkNetworkCB)
-					self["AboutScrollLabel"].setText(self.AboutText)
-
-	def exit(self):
-		self.close(True)
-
-	def updateStatusbar(self):
-		self["IFtext"].setText(_("Network:"))
-		self["IF"].setText(iNetwork.getFriendlyAdapterName(self.iface))
-		self["Statustext"].setText(_("Link:"))
-		if iNetwork.isWirelessInterface(self.iface):
-			self["devicepic"].setPixmapNum(1)
-			try:
-				self.iStatus.getDataForInterface(self.iface, self.getInfoCB)
-			except:
-				self["statuspic"].setPixmapNum(1)
-				self["statuspic"].show()
-		else:
-			iNetwork.getLinkState(self.iface, self.dataAvail)
-			self["devicepic"].setPixmapNum(0)
-		self["devicepic"].show()
-
-	def dataAvail(self, data):
-		self.LinkState = None
-		for line in data.splitlines():
-			line = line.strip()
-			if 'Link detected:' in line:
-				if "yes" in line:
-					self.LinkState = True
-				else:
-					self.LinkState = False
-		if self.LinkState:
-			iNetwork.checkNetworkState(self.checkNetworkCB)
-		else:
-			self["statuspic"].setPixmapNum(1)
-			self["statuspic"].show()
-
-	def checkNetworkCB(self, data):
-		try:
-			if iNetwork.getAdapterAttribute(self.iface, "up") is True:
-				if self.LinkState is True:
-					if data <= 2:
-						self["statuspic"].setPixmapNum(0)
-					else:
-						self["statuspic"].setPixmapNum(1)
-				else:
-					self["statuspic"].setPixmapNum(1)
-			else:
-				self["statuspic"].setPixmapNum(1)
-			self["statuspic"].show()
-		except:
-			pass
-
-class SystemMemoryInfo(Screen):
-	def __init__(self, session):
-		Screen.__init__(self, session)
-		screentitle = _("Memory")
-		title = screentitle
-		Screen.setTitle(self, title)
-		self.skinName = ["SystemMemoryInfo", "About"]
-		self["lab1"] = StaticText(_("Open Vision enigma2 image"))
-		self["lab2"] = StaticText(_("by Open Vision developers"))
-		self["lab3"] = StaticText(_("Support at %s") % "https://openvision.tech")
-		self["AboutScrollLabel"] = ScrollLabel()
-
-		self["key_red"] = Button(_("Close"))
-		self["actions"] = ActionMap(["SetupActions", "ColorActions"],
-									{
-										"cancel": self.close,
-										"ok": self.close,
-										"red": self.close,
-									})
-
-		out_lines = open("/proc/meminfo").readlines()
-		self.AboutText = _("RAM") + '\n\n'
-		RamTotal = "-"
-		RamFree = "-"
-		for lidx in range(len(out_lines) - 1):
-			tstLine = out_lines[lidx].split()
-			if "MemTotal:" in tstLine:
-				MemTotal = out_lines[lidx].split()
-				self.AboutText += _("Total memory:") + "\t" + MemTotal[1] + "\n"
-			if "MemFree:" in tstLine:
-				MemFree = out_lines[lidx].split()
-				self.AboutText += _("Free memory:") + "\t" + MemFree[1] + "\n"
-			if "Buffers:" in tstLine:
-				Buffers = out_lines[lidx].split()
-				self.AboutText += _("Buffers:") + "\t" + Buffers[1] + "\n"
-			if "Cached:" in tstLine:
-				Cached = out_lines[lidx].split()
-				self.AboutText += _("Cached:") + "\t" + Cached[1] + "\n"
-			if "SwapTotal:" in tstLine:
-				SwapTotal = out_lines[lidx].split()
-				self.AboutText += _("Total swap:") + "\t" + SwapTotal[1] + "\n"
-			if "SwapFree:" in tstLine:
-				SwapFree = out_lines[lidx].split()
-				self.AboutText += _("Free swap:") + "\t" + SwapFree[1] + "\n\n"
-
-		self["actions"].setEnabled(False)
-		self.Console = Console()
-		self.Console.ePopen("df -mh / | grep -v '^Filesystem'", self.Stage1Complete2)
-
-	def Stage1Complete2(self, result, retval, extra_args=None):
-		flash = str(result).replace('\n', '')
-		flash = flash.split()
-		RamTotal = flash[1]
-		RamFree = flash[3]
-
-		self.AboutText += _("Flash") + '\n\n'
-		self.AboutText += _("Total:") + "\t" + RamTotal + "\n"
-		self.AboutText += _("Free:") + "\t" + RamFree + "\n\n"
-
-		self["AboutScrollLabel"].setText(self.AboutText)
-		self["actions"].setEnabled(True)
+			})	
 
 class TranslationInfo(Screen):
 	def __init__(self, session):
@@ -1026,7 +274,7 @@ class TranslationInfo(Screen):
 				continue
 			(type, value) = l
 			infomap[type] = value
-		print(infomap)
+		print infomap
 
 		self["key_red"] = Button(_("Cancel"))
 		self["TranslationInfo"] = StaticText(info)
@@ -1068,21 +316,17 @@ class CommitInfo(Screen):
 		except:
 			branch = ""
 
-		if boxbranding.getVisionVersion().startswith("10"):
-			oegiturl = "https://api.github.com/repos/OpenVisionE2/openvision-development-platform/commits"
-		else:
-			oegiturl = "https://api.github.com/repos/OpenVisionE2/openvision-oe/commits"
-
 		self.project = 0
 		self.projects = [
-			("https://api.github.com/repos/OpenVisionE2/enigma2-openvision/commits" + branch, "Enigma2 - Vision"),
-			(oegiturl, "OE - Vision"),
-			("https://api.github.com/repos/OpenVisionE2/enigma2-plugins/commits", "Enigma2 plugins"),
-			("https://api.github.com/repos/OpenVisionE2/alliance-plugins/commits", "Alliance plugins"),
-			("https://api.github.com/repos/OpenVisionE2/OpenWebif/commits", "Open WebIF"),
-			("https://api.github.com/repos/OpenVisionE2/openvision-core-plugin/commits", "Vision core plugin"),
-			("https://api.github.com/repos/OpenVisionE2/BackupSuite/commits", "Backup Suite plugin"),
-			("https://api.github.com/repos/OpenVisionE2/OctEtFHD-skin/commits", "OctEtFHD skin")
+			("https://api.github.com/repos/openpli/enigma2/commits" + branch, "Enigma2"),
+			("https://api.github.com/repos/openpli/openpli-oe-core/commits" + branch, "Openpli Oe Core"),
+			("https://api.github.com/repos/openpli/enigma2-plugins/commits", "Enigma2 Plugins"),
+			("https://api.github.com/repos/openpli/aio-grab/commits", "Aio Grab"),
+			("https://api.github.com/repos/openpli/enigma2-plugin-extensions-epgimport/commits", "Plugin EPGImport"),
+			("https://api.github.com/repos/openpli/enigma2-plugin-skins-magic/commits", "Skin Magic SD"),
+			("https://api.github.com/repos/littlesat/skin-PLiHD/commits", "Skin PLi HD"),
+			("https://api.github.com/repos/E2OpenPlugins/e2openplugin-OpenWebif/commits", "OpenWebif"),
+			("https://api.github.com/repos/haroo/HansSettings/commits", "Hans settings")
 		]
 		self.cachedProjects = {}
 		self.Timer = eTimer()
@@ -1094,16 +338,17 @@ class CommitInfo(Screen):
 		commitlog = ""
 		from datetime import datetime
 		from json import loads
+		from urllib2 import urlopen
 		try:
 			commitlog += 80 * '-' + '\n'
 			commitlog += url.split('/')[-2] + '\n'
 			commitlog += 80 * '-' + '\n'
 			try:
-				# For python 2.7.11 we need to bypass the certificate check
+				# OpenPli 5.0 uses python 2.7.11 and here we need to bypass the certificate check
 				from ssl import _create_unverified_context
-				log = loads(urllib2.urlopen(url, timeout=5, context=_create_unverified_context()).read())
+				log = loads(urlopen(url, timeout=5, context=_create_unverified_context()).read())
 			except:
-				log = loads(urllib2.urlopen(url, timeout=5).read())
+				log = loads(urlopen(url, timeout=5).read())
 			for c in log:
 				creator = c['commit']['author']['name']
 				title = c['commit']['message']
@@ -1196,8 +441,8 @@ class MemoryInfo(Screen):
 			self["slide"].setValue(int(100.0*(mem-free)/mem+0.25))
 			self['pfree'].setText("%.1f %s" % (100.*free/mem,'%'))
 			self['pused'].setText("%.1f %s" % (100.*(mem-free)/mem,'%'))
-		except Exception as e:
-			print("[About] getMemoryInfo FAIL:", e)
+		except Exception, e:
+			print "[About] getMemoryInfo FAIL:", e
 
 	def clearMemory(self):
 		eConsoleAppContainer().execute("sync")
@@ -1216,8 +461,7 @@ class MemoryInfoSkinParams(GUIComponent):
 				if attrib == "rowsincolumn":
 					self.rows_in_column = int(value)
 			self.skinAttributes = attribs
-			applySkin = GUIComponent
-		return applySkin()
+		return GUIComponent.applySkin(self, desktop, screen)
 
 	GUI_WIDGET = eLabel
 
@@ -1303,8 +547,8 @@ class Troubleshoot(Screen):
 		else:
 			try:
 				if self.container.execute(command):
-					raise Exception("failed to execute: ", command)
-			except Exception as e:
+					raise Exception, "failed to execute: ", command
+			except Exception, e:
 				self["AboutScrollLabel"].setText("%s\n%s" % (_("An error occurred - Please try again later"), e))
 
 	def cancel(self):
@@ -1315,11 +559,11 @@ class Troubleshoot(Screen):
 
 	def getDebugFilesList(self):
 		import glob
-		return [x for x in sorted(glob.glob("/home/root/logs/enigma2_debug_*.log"), key=lambda x: os.path.isfile(x) and os.path.getmtime(x))]
+		return [x for x in sorted(glob.glob("/home/root/enigma.*.debuglog"), key=lambda x: os.path.isfile(x) and os.path.getmtime(x))]
 
 	def getLogFilesList(self):
 		import glob
-		home_root = "/home/root/logs/enigma2_crash.log"
+		home_root = "/home/root/enigma2_crash.log"
 		tmp = "/tmp/enigma2_crash.log"
 		return [x for x in sorted(glob.glob("/mnt/hdd/*.log"), key=lambda x: os.path.isfile(x) and os.path.getmtime(x))] + (os.path.isfile(home_root) and [home_root] or []) + (os.path.isfile(tmp) and [tmp] or [])
 
