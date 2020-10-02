@@ -9,40 +9,6 @@ from Components.Console import Console
 from Tools.Directories import fileExists
 from boxbranding import getSoCFamily
 
-socfamily = getSoCFamily()
-
-def _ifinfo(sock, addr, ifname):
-	iface = struct.pack('256s', ifname[:15])
-	info  = fcntl.ioctl(sock.fileno(), addr, iface)
-	if addr == 0x8927:
-		return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1].upper()
-	else:
-		return socket.inet_ntoa(info[20:24])
-
-def getIfConfig(ifname):
-	ifreq = {'ifname': ifname}
-	infos = {}
-	sock  = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	# offsets defined in /usr/include/linux/sockios.h on linux 2.6
-	infos['addr']    = 0x8915 # SIOCGIFADDR
-	infos['brdaddr'] = 0x8919 # SIOCGIFBRDADDR
-	infos['hwaddr']  = 0x8927 # SIOCSIFHWADDR
-	infos['netmask'] = 0x891b # SIOCGIFNETMASK
-	try:
-		for k,v in infos.items():
-			ifreq[k] = _ifinfo(sock, v, ifname)
-	except:
-		pass
-	return ifreq
-
-def getIfTransferredData(ifname):
-	f = open('/proc/net/dev', 'r')
-	for line in f:
-		if ifname in line:
-			data = line.split('%s:' % ifname)[1].split()
-			rx_bytes, tx_bytes = (data[0], data[8])
-			return rx_bytes, tx_bytes
-
 def getVersionString():
 	return getImageVersionString()
 
@@ -51,7 +17,7 @@ def getImageVersionString():
 		if os.path.isfile('/var/lib/opkg/status'):
 			st = os.stat('/var/lib/opkg/status')
 		tm = time.localtime(st.st_mtime)
-		if tm.tm_year >= 2018:
+		if tm.tm_year >= 2011:
 			return time.strftime("%Y-%m-%d %H:%M:%S", tm)
 	except:
 		pass
@@ -73,7 +39,7 @@ def getBuildDateString():
 def getUpdateDateString():
 	try:
 		from glob import glob
-		build = [x.split("-")[-2:-1][0][-8:] for x in open(glob("/var/lib/opkg/info/openvision-bootlogo.control")[0], "r") if x.startswith("Version:")][0]
+		build = [x.split("-")[-2:-1][0][-8:] for x in open(glob("/var/lib/opkg/info/oe-alliance-branding.control")[0], "r") if x.startswith("Version:")][0]
 		if build.isdigit():
 			return  "%s-%s-%s" % (build[:4], build[4:6], build[6:])
 	except:
@@ -94,13 +60,12 @@ def getGStreamerVersionString(cpu):
 		return "%s" % gst[1].split("+")[0].replace("\n","")
 	except:
 		return _("Not Required") if cpu.upper().startswith('HI') else _("Not Installed")
-
+	
 def getFFmpegVersionString():
 	try:
 		from glob import glob
 		ffmpeg = [x.split("Version: ") for x in open(glob("/var/lib/opkg/info/ffmpeg.control")[0], "r") if x.startswith("Version:")][0]
-		version = ffmpeg[1].split("-")[0].replace("\n","")
-		return "%s" % version.split("+")[0]
+		return "%s" % ffmpeg[1].split("-")[0].replace("\n","")
 	except:
 		return _("unknown")
 
@@ -110,35 +75,15 @@ def getKernelVersionString():
 	except:
 		return _("unknown")
 
-def getCPUBenchmark():
+def getHardwareTypeString():
+	return HardwareInfo().get_device_string()
+
+def getImageTypeString():
 	try:
-		cpucount = 0
-		for line in open("/proc/cpuinfo").readlines():
-			line = [x.strip() for x in line.strip().split(":")]
-			if line[0] == "processor":
-				cpucount += 1
-
-		if not fileExists("/tmp/dhry.txt"):
-			cmdbenchmark = "dhry > /tmp/dhry.txt"
-			Console().ePopen(cmdbenchmark)
-		if fileExists("/tmp/dhry.txt"):
-			cpubench = os.popen("cat /tmp/dhry.txt | grep 'Open Vision DMIPS' | sed 's|[^0-9]*||'").read().strip()
-			benchmarkstatus = os.popen("cat /tmp/dhry.txt | grep 'Open Vision CPU status' | cut -f2 -d':'").read().strip()
-
-		if cpucount > 1:
-			cpumaxbench = int(cpubench)*int(cpucount)
-			return "%s DMIPS per core\n%s DMIPS for all (%s) cores (%s)" % (cpubench, cpumaxbench, cpucount, benchmarkstatus)
-		else:
-			return "%s DMIPS (%s)" % (cpubench, benchmarkstatus)
+		image_type = open("/etc/issue").readlines()[-2].strip()[:-6]
+		return image_type.capitalize()
 	except:
-		return _("unknown")
-
-def getCPUSerial():
-	with open('/proc/cpuinfo','r') as f:
-		for line in f:
-			if line[0:6] == 'Serial':
-				return line[10:26]
-		return "0000000000000000"
+		return _("undefined")
 
 def getCPUInfoString():
 	try:
@@ -174,13 +119,9 @@ def getCPUInfoString():
 			temperature = open("/proc/stb/power/avs").readline().replace('\n','')
 		elif os.path.isfile('/proc/stb/fp/temp_sensor'):
 			temperature = open("/proc/stb/fp/temp_sensor").readline().replace('\n','')
-		elif os.path.isfile('/proc/stb/sensors/temp0/value'):
-			temperature = open("/proc/stb/sensors/temp0/value").readline().replace('\n','')
-		elif os.path.isfile('/proc/stb/sensors/temp/value'):
-			temperature = open("/proc/stb/sensors/temp/value").readline().replace('\n','')
 		elif os.path.isfile("/sys/devices/virtual/thermal/thermal_zone0/temp"):
 			try:
-				temperature = int(open("/sys/devices/virtual/thermal/thermal_zone0/temp").read().strip()) / 1000
+				temperature = int(open("/sys/devices/virtual/thermal/thermal_zone0/temp").read().strip())/1000
 			except:
 				pass
 		elif os.path.isfile("/proc/hisi/msp/pm_cpu"):
@@ -194,63 +135,12 @@ def getCPUInfoString():
 	except:
 		return _("undefined")
 
-def getChipSetString():
-	try:
-		chipset = open("/proc/stb/info/chipset", "r").read()
-		return str(chipset.lower().replace('\n',''))
-	except IOError:
-		return _("undefined")
-
-def getCPUBrand():
-	if SystemInfo["AmlogicFamily"]:
-		return _("Amlogic")
-	elif SystemInfo["HiSilicon"]:
-		return _("HiSilicon")
-	elif socfamily.startswith("smp"):
-		return _("Sigma Designs")
-	elif socfamily.startswith("bcm") or getBoxBrand() == "rpi":
-		return _("Broadcom")
-	else:
-		return _("undefined")
-
-def getCPUArch():
-	if SystemInfo["ArchIsARM64"]:
-		return _("ARM64")
-	elif SystemInfo["ArchIsARM"]:
-		return _("ARM")
-	else:
-		return _("Mipsel")
-
-def getFlashType():
-	if SystemInfo["SmallFlash"]:
-		return _("Small - Tiny image")
-	elif SystemInfo["MiddleFlash"]:
-		return _("Middle - Lite image")
-	else:
-		return _("Enough - Vision image")
-
-def getDVBAPI():
-	if SystemInfo["OLDE2API"]:
-		return _("Old")
-	else:
-		return _("New")
-
-def getVisionModule():
-	if SystemInfo["OpenVisionModule"]:
-		return _("Loaded")
-	else:
-		return _("Unknown, multiboot situation!")
-
 def getDriverInstalledDate():
 	try:
 		from glob import glob
 		try:
-			if getBoxType() in ("dm800","dm8000"):
-				driver = [x.split("-")[-2:-1][0][-9:] for x in open(glob("/var/lib/opkg/info/*-dvb-modules-*.control")[0], "r") if x.startswith("Version:")][0]
-				return  "%s-%s-%s" % (driver[:4], driver[4:6], driver[6:])
-			else:
-				driver = [x.split("-")[-2:-1][0][-8:] for x in open(glob("/var/lib/opkg/info/*-dvb-modules-*.control")[0], "r") if x.startswith("Version:")][0]
-				return  "%s-%s-%s" % (driver[:4], driver[4:6], driver[6:])
+			driver = [x.split("-")[-2:-1][0][-8:] for x in open(glob("/var/lib/opkg/info/*-dvb-modules-*.control")[0], "r") if x.startswith("Version:")][0]
+			return  "%s-%s-%s" % (driver[:4], driver[4:6], driver[6:])
 		except:
 			try:
 				driver = [x.split("Version:") for x in open(glob("/var/lib/opkg/info/*-dvb-proxy-*.control")[0], "r") if x.startswith("Version:")][0]
@@ -301,7 +191,7 @@ def GetIPsFromNetworkInterfaces():
 def getBoxUptime():
 	try:
 		time = ''
-		f = open("/proc/uptime", "r")
+		f = open("/proc/uptime", "rb")
 		secs = int(f.readline().split('.')[0])
 		f.close()
 		if secs > 86400:
@@ -315,6 +205,15 @@ def getBoxUptime():
 		return  "%s" % time
 	except:
 		return '-'
+
+def getIdea():
+		return _("BlackFish")
+
+def getEmail():
+		return _("blackfish.3654@gmail.com")
+	
+def getDonate():
+		return _("Z541154775569")
 
 # For modules that do "from About import about"
 about = sys.modules[__name__]
