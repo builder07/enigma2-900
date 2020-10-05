@@ -1,19 +1,12 @@
 #include <lib/base/eerror.h>
-                /* avoid warnigs :) */
+			/* avoid warnigs :) */
 #undef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200112L
-#if PY_MAJOR_VERSION >= 3
-extern "C" PyObject* PyInit__enigma(void);
-extern "C" PyObject* PyInit_eBaseImpl(void);
-extern "C" PyObject* PyInit_eConsoleImpl(void);
-#else
-extern "C" void init_enigma(void);
+extern "C" void init_enigma();
 extern "C" void eBaseInit(void);
 extern "C" void eConsoleInit(void);
-#endif
-extern void quitMainloop(int exitCode);
 extern void bsodFatal(const char *component);
-extern bool bsodRestart();
+extern void quitMainloop(int exitCode);
 
 #define SKIP_PART2
 #include <lib/python/python.h>
@@ -130,20 +123,12 @@ ePython::ePython()
 
 //	Py_OptimizeFlag = 1;
 
-#if PY_MAJOR_VERSION >= 3
-	PyImport_AppendInittab("_enigma", PyInit__enigma);
-	PyImport_AppendInittab("eBaseImpl", PyInit_eBaseImpl);
-	PyImport_AppendInittab("eConsoleImpl", PyInit_eConsoleImpl);
-#endif
-
 	Py_Initialize();
 	PyEval_InitThreads();
 
-#if PY_MAJOR_VERSION < 3
 	init_enigma();
 	eBaseInit();
 	eConsoleInit();
-#endif
 }
 
 ePython::~ePython()
@@ -221,14 +206,13 @@ int ePython::call(ePyObject pFunc, ePyObject pArgs)
 		 	PyErr_Print();
 			ePyObject FuncStr = PyObject_Str(pFunc);
 			ePyObject ArgStr = PyObject_Str(pArgs);
-			eLog(lvlFatal, "[ePyObject] (PyObject_CallObject(%s,%s) failed)", PyString_AS_STRING(FuncStr), PyString_AS_STRING(ArgStr));
+			eLog(lvlFatal, "[ePyObject] (CallObject(%s,%s) failed)", PyString_AS_STRING(FuncStr), PyString_AS_STRING(ArgStr));
 			Py_DECREF(FuncStr);
 			Py_DECREF(ArgStr);
 			/* immediately show BSOD, so we have the actual error at the bottom */
 		 	bsodFatal(0);
 			/* and make sure we quit (which would also eventually cause a bsod, but with useless termination messages) */
-			if (bsodRestart())
-				quitMainloop(5);
+			quitMainloop(5);
 		}
 	}
 	return res;
