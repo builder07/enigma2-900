@@ -6,8 +6,24 @@
 
 #include <string>
 #include <lib/base/object.h>
+#include "Python.h"
 
 #if !defined(SKIP_PART1) && !defined(SWIG)
+
+#if PY_MAJOR_VERSION >= 3
+#define PyStringObject PyUnicodeObject
+#define PyString_FromStringAndSize PyUnicode_FromStringAndSize
+#define PyString_AS_STRING PyUnicode_AsUTF8
+#define PyString_AsString PyUnicode_AsUTF8
+#define PyString_Check PyUnicode_Check
+
+#define PyInt_AsLong PyLong_AsLong
+#define PyInt_Check PyLong_Check
+#define PyInt_AsUnsignedLongMask PyLong_AsUnsignedLongMask
+
+#define PyExc_StandardError PyExc_Exception
+#endif
+
 class ePyObject
 {
 	PyObject *m_ob;
@@ -235,21 +251,33 @@ inline ePyObject Impl_PyDict_New(const char* file, int line)
 
 inline ePyObject Impl_PyString_FromString(const char* file, int line, const char *str)
 {
+#if PY_MAJOR_VERSION >= 3
+	return ePyObject(PyUnicode_FromString(str), file, line);
+#else
 	return ePyObject(PyString_FromString(str), file, line);
+#endif
 }
 
 inline ePyObject Impl_PyString_FromFormat(const char* file, int line, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
+#if PY_MAJOR_VERSION >= 3
+	PyObject *ob = PyUnicode_FromFormatV(fmt, ap);
+#else
 	PyObject *ob = PyString_FromFormatV(fmt, ap);
+#endif
 	va_end(ap);
 	return ePyObject(ob, file, line);
 }
 
 inline ePyObject Impl_PyInt_FromLong(const char* file, int line, long val)
 {
+#if PY_MAJOR_VERSION >= 3
+	return ePyObject(PyLong_FromLong(val), file, line);
+#else
 	return ePyObject(PyInt_FromLong(val), file, line);
+#endif
 }
 
 inline ePyObject Impl_PyLong_FromLong(const char* file, int line, long val)
@@ -265,10 +293,6 @@ inline ePyObject Impl_PyLong_FromUnsignedLong(const char* file, int line, unsign
 inline ePyObject Impl_PyLong_FromLongLong(const char* file, int line, long long val)
 {
 	return ePyObject(PyLong_FromLongLong(val), file, line);
-}
-inline ePyObject Impl_PyLong_FromUnsignedLongLong(const char* file, int line, unsigned long long val)
-{
-	return ePyObject(PyLong_FromUnsignedLongLong(val), file, line);
 }
 
 inline ePyObject Impl_PyList_GET_ITEM(const char *file, int line, ePyObject list, unsigned int pos)
@@ -320,21 +344,33 @@ inline ePyObject Impl_PyDict_New()
 
 inline ePyObject Impl_PyString_FromString(const char *str)
 {
+#if PY_MAJOR_VERSION >= 3
+	return PyUnicode_FromString(str);
+#else
 	return PyString_FromString(str);
+#endif
 }
 
 inline ePyObject Impl_PyString_FromFormat(const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
+#if PY_MAJOR_VERSION >= 3
+	PyObject *ob = PyUnicode_FromFormatV(fmt, ap);
+#else
 	PyObject *ob = PyString_FromFormatV(fmt, ap);
+#endif
 	va_end(ap);
 	return ePyObject(ob);
 }
 
 inline ePyObject Impl_PyInt_FromLong(long val)
 {
+#if PY_MAJOR_VERSION >= 3
+	return PyLong_FromLong(val);
+#else
 	return PyInt_FromLong(val);
+#endif
 }
 
 inline ePyObject Impl_PyLong_FromLong(long val)
@@ -350,10 +386,6 @@ inline ePyObject Impl_PyLong_FromUnsignedLong(unsigned long val)
 inline ePyObject Impl_PyLong_FromLongLong(long long val)
 {
 	return PyLong_FromLongLong(val);
-}
-inline ePyObject Impl_PyLong_FromUnsignedLongLong(unsigned long long val)
-{
-	return PyLong_FromUnsignedLongLong(val);
 }
 
 inline ePyObject Impl_PyList_GET_ITEM(ePyObject list, unsigned int pos)
@@ -398,7 +430,6 @@ inline void Impl_DECREF(PyObject *ob)
 #define PyLong_FromLong(val) Impl_PyLong_FromLong(__FILE__, __LINE__, val)
 #define PyLong_FromUnsignedLong(val) Impl_PyLong_FromUnsignedLong(__FILE__, __LINE__, val)
 #define PyLong_FromLongLong(val) Impl_PyLong_FromLongLong(__FILE__, __LINE__, val)
-#define PyLong_FromUnsignedLongLong(val) Impl_PyLongFromUnsignedLongLong(__FILE__, __LINE__, val)
 #define PyList_GET_ITEM(list, pos) Impl_PyList_GET_ITEM(__FILE__, __LINE__, list, pos)
 #define PyTuple_GET_ITEM(list, pos) Impl_PyTuple_GET_ITEM(__FILE__, __LINE__, list, pos)
 #else
@@ -415,7 +446,6 @@ inline void Impl_DECREF(PyObject *ob)
 #define PyLong_FromLong(val) Impl_PyLong_FromLong(val)
 #define PyLong_FromUnsignedLong(val) Impl_PyLong_FromUnsignedLong(val)
 #define PyLong_FromLongLong(val) Impl_PyLong_FromLongLong(val)
-#define PyLong_FromUnsignedLongLong(val) Impl_PyLong_FromUnsignedLongLong(val)
 #define PyList_GET_ITEM(list, pos) Impl_PyList_GET_ITEM(list, pos)
 #define PyTuple_GET_ITEM(list, pos) Impl_PyTuple_GET_ITEM(list, pos)
 #endif
